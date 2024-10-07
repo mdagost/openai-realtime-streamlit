@@ -67,6 +67,18 @@ EVENT_2_JSON = """
 ```
 """
 
+EVENT_3_JSON = """
+```
+{
+    "type": "session.update",
+    "session": {
+        "voice": "echo",
+        "instructions": "Always answer like an angry pirate."
+    }
+}
+```
+"""
+
 DOCS = f"""
 First, make sure that your OpenAI API key is set in the environment variable `OPENAI_API_KEY`.  Then click the `Connect` button.
 Send raw json event payloads by pasting them in the input text area and clicking `Send`.  You should then see events streaming in the logs area.
@@ -77,6 +89,10 @@ As a test, trying sending:
 followed by:
 
 {EVENT_2_JSON}
+
+Or, to change the voice or instructions, run this at the start of a session:
+
+{EVENT_3_JSON}
 
 You can find the OpenAI realtime events documented [here](https://platform.openai.com/docs/guides/realtime/events).
 """
