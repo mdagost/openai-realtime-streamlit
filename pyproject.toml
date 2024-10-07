@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "openai-realtime-streamlit"
+version = "0.0.1"
+description = "POC Port of the openai-realtime-console to streamlit."
+authors = ["Michealngelo D'Agostino <mdagost@gmail.com>"]
+readme = "README.md"
+packages = [{include = "openai_realtime_streamlit"}]
+repository = "https://github.com/mdagost/openai-realtime-streamlit"
+
+# Requirements
+[tool.poetry.dependencies]
+python = "^3.10"
+streamlit = "^1.39.0"
+tzlocal = "^5.2"
+websockets = "^13.1"
+sounddevice = "^0.5.0"
+
+[build-system]
+requires = ["poetry-core>=1.5.0"]
+build-backend = "poetry.core.masonry.api"

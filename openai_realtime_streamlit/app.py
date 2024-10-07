@@ -6,6 +6,8 @@ from threading import Thread
 
 import streamlit as st
 
+from constants import (AUTOSCROLL_SCRIPT, HIDE_STREAMLIT_RUNNING_MAN_SCRIPT,
+                       OAI_LOGO_URL)
 from utils import SimpleRealtime
 
 
@@ -44,35 +46,6 @@ st.session_state.client = setup_client()
 
 @st.fragment(run_every=1)
 def logs_text_area():
-    scroll_script = """
-<script>
-    let lastScrollHeight = 0;
-    let userHasScrolledUp = false;
-
-    function autoScroll() {
-        const streamlitDoc = window.parent.document;
-        const textArea = streamlitDoc.getElementsByClassName('st-key-logs_container')[0];
-        const scrollArea = textArea.parentElement.parentElement;
-        
-        // Check if content height has changed
-        if (scrollArea.scrollHeight !== lastScrollHeight) {
-            // Only auto-scroll if user hasn't scrolled up
-            if (!userHasScrolledUp) {
-                scrollArea.scrollTop = scrollArea.scrollHeight;
-            }
-            lastScrollHeight = scrollArea.scrollHeight;
-        }
-
-        // Detect if user has scrolled up
-        const isScrolledToBottom = scrollArea.scrollHeight - scrollArea.scrollTop <= scrollArea.clientHeight + 50; // 50px threshold
-        userHasScrolledUp = !isScrolledToBottom;
-    }
-
-    // Run auto-scroll check periodically
-    setInterval(autoScroll, 500);
-</script>
-    """
-
     logs = st.session_state.client.logs
     if st.session_state.show_full_events:
         for _, _, log in logs:
@@ -83,11 +56,13 @@ def logs_text_area():
                 st.write(f"{time}\t:green[↓ server] {json.loads(log)['type']}")
             else:
                 st.write(f"{time}\t:blue[↑ client] {json.loads(log)['type']}")
-    st.components.v1.html(scroll_script, height=0)
+    st.components.v1.html(AUTOSCROLL_SCRIPT, height=0)
 
 
 def st_app():
-    st.title("OpenAI Realtime Chat")
+    st.markdown(HIDE_STREAMLIT_RUNNING_MAN_SCRIPT, unsafe_allow_html=True)
+
+    st.markdown(f"<img src='{OAI_LOGO_URL}' width='30px'/>   **realtime console**", unsafe_allow_html=True)
 
     with st.sidebar:
         if st.button("Connect", type="primary"):

@@ -83,8 +83,6 @@ class SimpleRealtime:
 
     def receive(self, event):
         self.log_event("server", event)
-        #self.dispatch(f"server.{event_name}", event)
-        #self.dispatch("server.*", event)
         return True
 
 
@@ -101,11 +99,8 @@ class SimpleRealtime:
             **data
         }
         
-        #self.dispatch(f"client.{event_name}", event)
-        #self.dispatch("client.*", event)
         self.log_event("client", event)
         
         self.event_loop.create_task(self.ws.send(json.dumps(event)))
 
         return True
-    
