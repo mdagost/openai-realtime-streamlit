@@ -93,8 +93,7 @@ class SimpleRealtime:
             b64_audio_chunk = event.get("delta")
             decoded_audio_chunk = base64.b64decode(b64_audio_chunk)
             pcm_audio_chunk = np.frombuffer(decoded_audio_chunk, dtype=np.int16)
-            with st.session_state.buffer_lock:
-                self.audio_buffer = np.concatenate([self.audio_buffer, pcm_audio_chunk])
+            self.audio_buffer = np.concatenate([self.audio_buffer, pcm_audio_chunk])
 
 
     def receive(self, event):

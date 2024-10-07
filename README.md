@@ -1,6 +1,8 @@
 # openai-realtime-streamlit
 POC Port of the [openai-realtime-console](https://github.com/openai/openai-realtime-console?tab=readme-ov-file) to streamlit.
 
+Huge thanks to @MadCowD for their (realtime python client)[https://github.com/MadcowD/ell/tree/main/x/openai_realtime], from which I ripped my simple version.
+
 ## Instructions ##
 1. Create a virtualenv for python >=3.10.
 2. Run `poetry install`
