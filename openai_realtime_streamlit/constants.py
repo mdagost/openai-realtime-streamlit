@@ -40,3 +40,43 @@ HIDE_STREAMLIT_RUNNING_MAN_SCRIPT = """
 """
 
 OAI_LOGO_URL = "https://raw.githubusercontent.com/openai/openai-realtime-console/refs/heads/main/public/openai-logomark.svg"
+
+EVENT_1_JSON = """
+```
+{
+    "type": "conversation.item.create",
+    "item": {
+        "type": "message",
+        "role": "user",
+        "content": [
+            {
+                "type": "input_text",
+                "text": "This is the way the world ends..."
+            }
+        ]
+    }
+}
+```
+"""
+
+EVENT_2_JSON = """
+```
+{
+    "type": "response.create"
+}
+```
+"""
+
+DOCS = f"""
+First, make sure that your OpenAI API key is set in the environment variable `OPENAI_API_KEY`.  Then click the `Connect` button.
+Send raw json event payloads by pasting them in the input text area and clicking `Send`.  You should then see events streaming in the logs area.
+As a test, trying sending:
+
+{EVENT_1_JSON}
+
+followed by:
+
+{EVENT_2_JSON}
+
+You can find the OpenAI realtime events documented [here](https://platform.openai.com/docs/guides/realtime/events).
+"""

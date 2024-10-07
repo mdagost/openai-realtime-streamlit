@@ -6,8 +6,8 @@ from threading import Thread
 
 import streamlit as st
 
-from constants import (AUTOSCROLL_SCRIPT, HIDE_STREAMLIT_RUNNING_MAN_SCRIPT,
-                       OAI_LOGO_URL)
+from constants import (AUTOSCROLL_SCRIPT, DOCS,
+                       HIDE_STREAMLIT_RUNNING_MAN_SCRIPT, OAI_LOGO_URL)
 from utils import SimpleRealtime
 
 
@@ -62,44 +62,49 @@ def logs_text_area():
 def st_app():
     st.markdown(HIDE_STREAMLIT_RUNNING_MAN_SCRIPT, unsafe_allow_html=True)
 
-    st.markdown(f"<img src='{OAI_LOGO_URL}' width='30px'/>   **realtime console**", unsafe_allow_html=True)
+    main_tab, docs_tab = st.tabs(["Console", "Docs"])
 
-    with st.sidebar:
-        if st.button("Connect", type="primary"):
-            with st.spinner("Connecting..."):
+    with main_tab:
+        st.markdown(f"<img src='{OAI_LOGO_URL}' width='30px'/>   **realtime console**", unsafe_allow_html=True)
+
+        with st.sidebar:
+            if st.button("Connect", type="primary"):
+                with st.spinner("Connecting..."):
+                    try:
+                        run_async(st.session_state.client.connect())
+                        if st.session_state.client.is_connected():
+                            st.success("Connected to OpenAI Realtime API")
+                        else:
+                            st.error("Failed to connect to OpenAI Realtime API")
+                    except Exception as e:
+                        st.error(f"Error connecting to OpenAI Realtime API: {str(e)}")
+
+        st.session_state.show_full_events = st.checkbox("Show Full Events", value=False)
+        with st.container(height=300, key="logs_container"):
+            logs_text_area()
+
+        _ = st.text_area("Enter your message:", key = "input_text_area", height=200)
+        def clear_input_cb():
+            st.session_state.last_input = st.session_state.input_text_area
+            st.session_state.input_text_area = ""
+
+        # Send button
+        if st.button("Send", on_click=clear_input_cb, type="primary"):
+            if st.session_state.get("last_input"):
                 try:
-                    run_async(st.session_state.client.connect())
-                    if st.session_state.client.is_connected():
-                        st.success("Connected to OpenAI Realtime API")
-                    else:
-                        st.error("Failed to connect to OpenAI Realtime API")
+                    event = json.loads(st.session_state.get("last_input"))
+                    with st.spinner("Sending message..."):
+                        st.session_state.client.send(event["type"], {"item": event["item"]} if "item" in event else {})
+                    st.success("Message sent successfully")
+                except json.JSONDecodeError:
+                    st.error("Invalid JSON input. Please check your message format.")
                 except Exception as e:
-                    st.error(f"Error connecting to OpenAI Realtime API: {str(e)}")
-    
-    st.session_state.show_full_events = st.checkbox("Show Full Events", value=False)
-    with st.container(height=300, key="logs_container"):
-        logs_text_area()
+                    st.error(f"Error sending message: {str(e)}")
+            else:
+                st.warning("Please enter a message before sending.")
 
-    _ = st.text_area("Enter your message:", key = "input_text_area", height=200)
-    def clear_input_cb():
-        st.session_state.last_input = st.session_state.input_text_area
-        st.session_state.input_text_area = ""
-
-    # Send button
-    if st.button("Send", on_click=clear_input_cb, type="primary"):
-        if st.session_state.get("last_input"):
-            try:
-                event = json.loads(st.session_state.get("last_input"))
-                with st.spinner("Sending message..."):
-                    st.session_state.client.send(event["type"], {"item": event["item"]} if "item" in event else {})
-                st.success("Message sent successfully")
-            except json.JSONDecodeError:
-                st.error("Invalid JSON input. Please check your message format.")
-            except Exception as e:
-                st.error(f"Error sending message: {str(e)}")
-        else:
-            st.warning("Please enter a message before sending.")
-
+    with docs_tab:
+        st.markdown(DOCS)
 
 
 if __name__ == '__main__':
