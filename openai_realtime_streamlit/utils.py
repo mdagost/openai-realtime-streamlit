@@ -10,15 +10,15 @@ import websockets
 
 
 class SimpleRealtime:
-    def __init__(self, event_loop=None, debug=False):
+    def __init__(self, event_loop=None, audio_buffer_cb=None, debug=False):
         self.url = 'wss://api.openai.com/v1/realtime'
         self.debug = debug
         self.event_loop = event_loop
         self.logs = []
-        self.audio_buffer = np.array([], dtype=np.int16)
         self.transcript = ""
         self.ws = None
         self._message_handler_task = None
+        self.audio_buffer_cb = audio_buffer_cb
 
 
     def is_connected(self):
@@ -55,11 +55,11 @@ class SimpleRealtime:
         try:
             while True:
                 if not self.ws:
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.05)
                     continue
                     
                 try:
-                    message = await asyncio.wait_for(self.ws.recv(), timeout=0.1)
+                    message = await asyncio.wait_for(self.ws.recv(), timeout=0.05)
                     data = json.loads(message)
                     self.receive(data)
                 except asyncio.TimeoutError:
@@ -89,11 +89,11 @@ class SimpleRealtime:
         if event.get("type") == "response.audio_transcript.delta":
             self.transcript += event.get("delta")
 
-        if event.get("type") == "response.audio.delta":
+        if event.get("type") == "response.audio.delta" and self.audio_buffer_cb:
             b64_audio_chunk = event.get("delta")
             decoded_audio_chunk = base64.b64decode(b64_audio_chunk)
             pcm_audio_chunk = np.frombuffer(decoded_audio_chunk, dtype=np.int16)
-            self.audio_buffer = np.concatenate([self.audio_buffer, pcm_audio_chunk])
+            self.audio_buffer_cb(pcm_audio_chunk)
 
 
     def receive(self, event):

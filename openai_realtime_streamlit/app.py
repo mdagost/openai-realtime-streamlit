@@ -14,6 +14,45 @@ from utils import SimpleRealtime
 
 st.set_page_config(layout="wide")
 
+audio_buffer = np.array([], dtype=np.int16)
+
+buffer_lock = threading.Lock()
+
+if "audio_stream_started" not in st.session_state:
+    st.session_state.audio_stream_started = False
+
+def audio_buffer_cb(pcm_audio_chunk):
+    """
+    Callback function so that our realtime client can fill the audio buffer
+    """
+    global audio_buffer
+
+    with buffer_lock:
+        audio_buffer = np.concatenate([audio_buffer, pcm_audio_chunk])
+
+
+# callback function for real-time playback using sounddevice
+def sd_audio_cb(outdata, frames, time, status):
+    global audio_buffer
+
+    channels = 1
+
+    with buffer_lock:
+        # if there is enough audio in the buffer, send it
+        if len(audio_buffer) >= frames:
+            outdata[:] = audio_buffer[:frames].reshape(-1, channels)
+            # remove the audio that has been played
+            audio_buffer = audio_buffer[frames:]
+        else:
+            # if not enough audio, fill with silence
+            outdata.fill(0)
+
+
+def start_audio_stream():
+    with sd.OutputStream(callback=sd_audio_cb, dtype="int16", samplerate=24_000, channels=1, blocksize=2_000):
+        # keep stream open indefinitely, simulate long duration
+        sd.sleep(int(10e6))
+
 
 @st.cache_resource(show_spinner=False)
 def create_loop():
@@ -47,7 +86,7 @@ def setup_client():
     """
     if client := st.session_state.get("client"):
         return client
-    return SimpleRealtime(event_loop=st.session_state.event_loop, debug=True)
+    return SimpleRealtime(event_loop=st.session_state.event_loop, audio_buffer_cb=audio_buffer_cb, debug=True)
 
 st.session_state.client = setup_client()
 
@@ -70,9 +109,15 @@ def logs_text_area():
 
 @st.fragment(run_every=1)
 def response_area():
+    global audio_buffer
+
     st.markdown("**conversation**")
     
     st.write(st.session_state.client.transcript)
+
+    if not st.session_state.audio_stream_started:
+        st.session_state.audio_stream_started = True
+        start_audio_stream()
 
 
 def st_app():
@@ -119,7 +164,8 @@ def st_app():
                 try:
                     event = json.loads(st.session_state.get("last_input"))
                     with st.spinner("Sending message..."):
-                        st.session_state.client.send(event["type"], {"item": event["item"]} if "item" in event else {})
+                        event_type = event.pop("type")
+                        st.session_state.client.send(event_type, event)
                     st.success("Message sent successfully")
                 except json.JSONDecodeError:
                     st.error("Invalid JSON input. Please check your message format.")
