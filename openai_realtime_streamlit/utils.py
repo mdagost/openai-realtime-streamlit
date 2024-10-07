@@ -1,5 +1,7 @@
 import asyncio
+import base64
 import json
+import numpy as np
 import os
 import tzlocal
 from datetime import datetime
@@ -13,6 +15,8 @@ class SimpleRealtime:
         self.debug = debug
         self.event_loop = event_loop
         self.logs = []
+        self.audio_buffer = np.array([], dtype=np.int16)
+        self.transcript = ""
         self.ws = None
         self._message_handler_task = None
 
@@ -81,8 +85,22 @@ class SimpleRealtime:
         return True
 
 
+    def handle_audio(self, event):
+        if event.get("type") == "response.audio_transcript.delta":
+            self.transcript += event.get("delta")
+
+        if event.get("type") == "response.audio.delta":
+            b64_audio_chunk = event.get("delta")
+            decoded_audio_chunk = base64.b64decode(b64_audio_chunk)
+            pcm_audio_chunk = np.frombuffer(decoded_audio_chunk, dtype=np.int16)
+            with st.session_state.buffer_lock:
+                self.audio_buffer = np.concatenate([self.audio_buffer, pcm_audio_chunk])
+
+
     def receive(self, event):
         self.log_event("server", event)
+        if "response.audio" in event.get("type"):
+            self.handle_audio(event)
         return True
 
 

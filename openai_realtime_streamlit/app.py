@@ -1,9 +1,10 @@
 import asyncio
 import json
-import time
+import threading
 from asyncio import run_coroutine_threadsafe
-from threading import Thread
 
+import numpy as np
+import sounddevice as sd
 import streamlit as st
 
 from constants import (AUTOSCROLL_SCRIPT, DOCS,
@@ -12,10 +13,6 @@ from utils import SimpleRealtime
 
 
 st.set_page_config(layout="wide")
-
-
-if "logs" not in st.session_state:
-    st.session_state.logs = []
 
 
 @st.cache_resource(show_spinner=False)
@@ -28,7 +25,7 @@ def create_loop():
     and sessions, so this is only okay for a local R&D app like this.
     """
     loop = asyncio.new_event_loop()
-    thread = Thread(target=loop.run_forever)
+    thread = threading.Thread(target=loop.run_forever)
     thread.start()
     return loop, thread
 
@@ -71,6 +68,13 @@ def logs_text_area():
     st.components.v1.html(AUTOSCROLL_SCRIPT, height=0)
 
 
+@st.fragment(run_every=1)
+def response_area():
+    st.markdown("**conversation**")
+    
+    st.write(st.session_state.client.transcript)
+
+
 def st_app():
     """
     Our main streamlit app function.
@@ -97,6 +101,9 @@ def st_app():
         st.session_state.show_full_events = st.checkbox("Show Full Event Payloads", value=False)
         with st.container(height=300, key="logs_container"):
             logs_text_area()
+
+        with st.container(height=300, key="response_container"):
+            response_area()
 
         _ = st.text_area("Enter your message:", key = "input_text_area", height=200)
         def clear_input_cb():
