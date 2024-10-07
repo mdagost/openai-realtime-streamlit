@@ -11,4 +11,4 @@ Huge thanks to [MadCowD](https://github.com/MadcowD) for ell's [POC realtime pyt
 
 **TODO 10/7**: Add support for sending and playing back streaming audio.  Async and streamlit don't play well together, so this is proving to be a bit tough...
 
-<img src="/readme/screenshot.png" width="800" />
+<img src="/readme/screenshot.png?" width="800" />
