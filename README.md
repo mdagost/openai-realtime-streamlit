@@ -9,6 +9,7 @@ Huge thanks to [MadCowD](https://github.com/MadcowD) for ell's [POC realtime pyt
 3. Make sure you OpenAI API key is set as an environment variable at `OPENAI_API_KEY`.
 4. Run `streamlit run openai_realtime_streamlit/app.py`.
 
-**TODO 10/7**: Add support for sending and playing back streaming audio.  Async and streamlit don't play well together, so this is proving to be a bit tough...
+**10/7**: Added support for playing back streaming audio.
+**TODO 10/7**: Add support for sending streaming audio.
 
 <img src="/readme/screenshot.png" width="800" />
