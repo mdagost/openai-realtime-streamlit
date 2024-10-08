@@ -142,17 +142,17 @@ class StreamingAudioRecorder:
         This will be called for each audio block
         that gets recorded.
         """
-        if status:
-            print(status)
         self.audio_queue.put(indata.copy())
 
 
     def start_recording(self):
         self.is_recording = True
         self.audio_thread = sd.InputStream(
+            dtype="int16",
             samplerate=self.sample_rate,
             channels=self.channels,
-            callback=self.callback
+            callback=self.callback,
+            blocksize=2_000
         )
         self.audio_thread.start()
 
