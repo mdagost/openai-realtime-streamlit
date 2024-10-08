@@ -9,7 +9,7 @@ import streamlit as st
 
 from constants import (AUTOSCROLL_SCRIPT, DOCS,
                        HIDE_STREAMLIT_RUNNING_MAN_SCRIPT, OAI_LOGO_URL)
-from utils import SimpleRealtime
+from utils import SimpleRealtime, StreamingAudioRecorder
 
 
 st.set_page_config(layout="wide")
@@ -89,6 +89,12 @@ def setup_client():
     return SimpleRealtime(event_loop=st.session_state.event_loop, audio_buffer_cb=audio_buffer_cb, debug=True)
 
 st.session_state.client = setup_client()
+
+
+#if "recorder" not in st.session_state:
+#        st.session_state.recorder = StreamingAudioRecorder()
+#if "recording" not in st.session_state:
+#        st.session_state.recording = False
 
 
 @st.fragment(run_every=1)
