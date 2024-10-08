@@ -109,12 +109,12 @@ def logs_text_area():
 
 @st.fragment(run_every=1)
 def response_area():
-    global audio_buffer
-
     st.markdown("**conversation**")
-    
     st.write(st.session_state.client.transcript)
 
+
+@st.fragment(run_every=1)
+def audio_player():
     if not st.session_state.audio_stream_started:
         st.session_state.audio_stream_started = True
         start_audio_stream()
@@ -176,6 +176,8 @@ def st_app():
 
     with docs_tab:
         st.markdown(DOCS)
+
+    audio_player()
 
 
 if __name__ == '__main__':
