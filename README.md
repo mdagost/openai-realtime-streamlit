@@ -10,7 +10,6 @@ Huge thanks to [MadCowD](https://github.com/MadcowD) for ell's [POC realtime pyt
 4. Run `streamlit run openai_realtime_streamlit/app.py`.
 
 **10/7**: Added support for playing back streaming audio.
-
-**TODO 10/7**: Add support for sending streaming audio.
+**10/8**: Added support for sending streaming audio input.
 
 <img src="/readme/screenshot.png" width="800" />
