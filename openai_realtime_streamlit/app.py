@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 import threading
 from asyncio import run_coroutine_threadsafe
@@ -9,7 +10,7 @@ import streamlit as st
 
 from constants import (AUTOSCROLL_SCRIPT, DOCS,
                        HIDE_STREAMLIT_RUNNING_MAN_SCRIPT, OAI_LOGO_URL)
-from utils import SimpleRealtime
+from utils import SimpleRealtime, StreamingAudioRecorder
 
 
 st.set_page_config(layout="wide")
@@ -91,6 +92,23 @@ def setup_client():
 st.session_state.client = setup_client()
 
 
+if "recorder" not in st.session_state:
+       st.session_state.recorder = StreamingAudioRecorder()
+if "recording" not in st.session_state:
+       st.session_state.recording = False
+
+
+def toggle_recording():
+    st.session_state.recording = not st.session_state.recording
+
+    if st.session_state.recording:
+        st.session_state.recorder.start_recording()
+    else:
+        st.session_state.recorder.stop_recording()
+        st.session_state.client.send("input_audio_buffer.commit")
+        st.session_state.client.send("response.create")
+
+
 @st.fragment(run_every=1)
 def logs_text_area():
     logs = st.session_state.client.logs
@@ -118,6 +136,15 @@ def audio_player():
     if not st.session_state.audio_stream_started:
         st.session_state.audio_stream_started = True
         start_audio_stream()
+
+
+@st.fragment(run_every=1)
+def audio_recorder():
+    if st.session_state.recording:
+        # drain what's in the queue and send it to openai
+        while not st.session_state.recorder.audio_queue.empty():
+            chunk = st.session_state.recorder.audio_queue.get()
+            st.session_state.client.send("input_audio_buffer.append", {"audio": base64.b64encode(chunk).decode()})
 
 
 def st_app():
@@ -150,6 +177,9 @@ def st_app():
         with st.container(height=300, key="response_container"):
             response_area()
 
+        button_text = "Stop Recording" if st.session_state.recording else "Send Audio"
+        st.button(button_text, on_click=toggle_recording, type="primary")
+
         _ = st.text_area("Enter your message:", key = "input_text_area", height=200)
         def clear_input_cb():
             """
@@ -178,6 +208,8 @@ def st_app():
         st.markdown(DOCS)
 
     audio_player()
+
+    audio_recorder()
 
 
 if __name__ == '__main__':
