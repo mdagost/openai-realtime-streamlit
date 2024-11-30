@@ -1,0 +1,6 @@
+requests
+numpy
+sounddevice
+streamlit
+tzlocal
+websockets

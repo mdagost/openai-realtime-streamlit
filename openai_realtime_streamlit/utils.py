@@ -3,11 +3,11 @@ import base64
 import json
 import numpy as np
 import os
-import queue
 import tzlocal
 from datetime import datetime
+from inspect import signature, Parameter
+from typing import Dict, Any, List, Optional
 
-import sounddevice as sd
 import websockets
 
 
@@ -21,20 +21,111 @@ class SimpleRealtime:
         self.ws = None
         self._message_handler_task = None
         self.audio_buffer_cb = audio_buffer_cb
+        self.tools = {}  # Added for tool support
 
+    def _function_to_schema(self, func: callable) -> Dict[str, Any]:
+        """
+        Converts a function into a schema suitable for the Realtime API's tool format.
+        """
+        type_map = {
+            str: "string",
+            int: "integer",
+            float: "number",
+            bool: "boolean",
+            list: "array",
+            dict: "object",
+            type(None): "null",
+        }
+
+        sig = signature(func)
+        parameters = {}
+        required = []
+
+        for name, param in sig.parameters.items():
+            if name == 'args':  # Skip *args
+                continue
+
+            param_type = type_map.get(param.annotation, "string")
+            param_info = {"type": param_type}
+
+            # Add description from type hints if available
+            if param.annotation.__doc__:
+                param_info["description"] = param.annotation.__doc__.strip()
+
+            parameters[name] = param_info
+
+            if param.default == Parameter.empty:
+                required.append(name)
+
+        return {
+            "name": func.__name__,
+            "description": (func.__doc__ or "").strip(),
+            "parameters": {
+                "type": "object",
+                "properties": parameters,
+                "required": required
+            }
+        }
+
+    def add_tool(self, func_or_definition: Any, handler: Optional[callable] = None) -> bool:
+        """
+        Add a tool that can be called by the assistant.
+        Can be called with either:
+        1. add_tool(function) - automatically generates schema from function
+        2. add_tool(definition, handler) - manual schema definition and handler
+        """
+        if handler is None:
+            # Called with just a function - generate schema automatically
+            if not callable(func_or_definition):
+                raise ValueError("When called with one argument, it must be a callable")
+            handler = func_or_definition
+            definition = self._function_to_schema(func_or_definition)
+        else:
+            # Called with definition and handler
+            definition = func_or_definition
+            if not definition.get('name'):
+                raise ValueError("Missing tool name in definition")
+            if not callable(handler):
+                raise ValueError(f"Tool '{definition['name']}' handler must be a function")
+
+        name = definition['name']
+        if name in self.tools:
+            raise ValueError(f"Tool '{name}' already added")
+
+        self.tools[name] = {'definition': definition, 'handler': handler}
+
+        # Update session with new tool if connected
+        if self.is_connected():
+            self.send("session.update", {
+                "session": {
+                    "tools": [
+                        {**tool['definition'], 'type': 'function'}
+                        for tool in self.tools.values()
+                    ],
+                    "tool_choice": "auto"
+                }
+            })
+        return True
+
+    def add_tools(self, functions: List[callable]) -> bool:
+        """
+        Add multiple functions as tools at once, automatically generating schemas.
+        """
+        for func in functions:
+            self.add_tool(func)
+        return True
 
     def is_connected(self):
-        return self.ws is not None and self.ws.open
-
+        return self.ws is not None #and self.ws.open
 
     def log_event(self, event_type, event):
         if self.debug:
-            local_timezone = tzlocal.get_localzone() 
+            local_timezone = tzlocal.get_localzone()
             now = datetime.now(local_timezone).strftime("%H:%M:%S")
             msg = json.dumps(event)
             self.logs.append((now, event_type, msg))
-
         return True
+
 
     async def connect(self, model="gpt-4o-realtime-preview-2024-10-01"):
         if self.is_connected():
@@ -44,14 +135,27 @@ class SimpleRealtime:
             "Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}",
             "OpenAI-Beta": "realtime=v1"
         }
-        
-        self.ws = await websockets.connect(f"{self.url}?model={model}", extra_headers=headers)
-        
+
+        self.ws = await websockets.connect(f"{self.url}?model={model}", additional_headers=headers)
+
         # Start the message handler in the same loop as the websocket
         self._message_handler_task = self.event_loop.create_task(self._message_handler())
-        
-        return True
 
+        # Send initial session configuration with tools
+        if self.tools:
+            use_tools = [
+                {**tool['definition'], 'type': 'function'}
+                for tool in self.tools.values()
+            ]
+            await self.ws.send(json.dumps({
+                "type": "session.update",
+                "session": {
+                    "tools": use_tools,
+                    "tool_choice": "auto"
+                }
+            }))
+
+        return True
 
     async def _message_handler(self):
         try:
@@ -59,11 +163,11 @@ class SimpleRealtime:
                 if not self.ws:
                     await asyncio.sleep(0.05)
                     continue
-                    
+
                 try:
                     message = await asyncio.wait_for(self.ws.recv(), timeout=0.05)
                     data = json.loads(message)
-                    self.receive(data)
+                    await self.receive(data)  # Changed to await
                 except asyncio.TimeoutError:
                     continue
                 except websockets.exceptions.ConnectionClosed:
@@ -71,7 +175,6 @@ class SimpleRealtime:
         except Exception as e:
             print(f"Message handler error: {e}")
             await self.disconnect()
-
 
     async def disconnect(self):
         if self.ws:
@@ -86,6 +189,49 @@ class SimpleRealtime:
         self._message_handler_task = None
         return True
 
+    async def handle_function_call(self, event):
+        """Handle function calls from the assistant"""
+        try:
+            name = event.get('name')
+            if name not in self.tools:
+                print(f"Unknown tool: {name}")
+                return
+
+            call_id = event.get('call_id')
+            arguments = json.loads(event.get('arguments', '{}'))
+            tool = self.tools[name]
+
+            # Execute the function
+            result = await tool['handler'](arguments) if asyncio.iscoroutinefunction(tool['handler']) else tool[
+                'handler'](arguments)
+
+            # Send function output back
+            await self.ws.send(json.dumps({
+                "type": "conversation.item.create",
+                "item": {
+                    "type": "function_call_output",
+                    "call_id": call_id,
+                    "output": json.dumps(result)
+                }
+            }))
+
+            # Request a new response
+            await self.ws.send(json.dumps({
+                "type": "response.create"
+            }))
+
+        except Exception as e:
+            print(f"Error handling function call: {e}")
+            if call_id:
+                # Send error as function output
+                await self.ws.send(json.dumps({
+                    "type": "conversation.item.create",
+                    "item": {
+                        "type": "function_call_output",
+                        "call_id": call_id,
+                        "output": json.dumps({"error": str(e)})
+                    }
+                }))
 
     def handle_audio(self, event):
         if event.get("type") == "response.audio_transcript.delta":
@@ -97,75 +243,38 @@ class SimpleRealtime:
             pcm_audio_chunk = np.frombuffer(decoded_audio_chunk, dtype=np.int16)
             self.audio_buffer_cb(pcm_audio_chunk)
 
-
-    def receive(self, event):
+    async def receive(self, event):
         self.log_event("server", event)
-        if "response.audio" in event.get("type"):
-            self.handle_audio(event)
-        return True
 
+        event_type = event.get("type", "")
+
+        # Handle function calls
+        if event_type == "response.function_call_arguments.done":
+            await self.handle_function_call(event)
+
+        # Handle audio responses
+        elif "response.audio" in event_type:
+            self.handle_audio(event)
+
+        return True
 
     def send(self, event_name, data=None):
         if not self.is_connected():
             raise Exception("RealtimeAPI is not connected")
-        
+
         data = data or {}
         if not isinstance(data, dict):
             raise ValueError("data must be a dictionary")
-        
+
         event = {
             "type": event_name,
             **data
         }
-        
+
         self.log_event("client", event)
-        
+
         self.event_loop.create_task(self.ws.send(json.dumps(event)))
 
         return True
 
 
-class StreamingAudioRecorder:
-    """
-    Thanks Sonnet 3.5...
-    """
-    def __init__(self, sample_rate=24_000, channels=1):
-        self.sample_rate = sample_rate
-        self.channels = channels
-        self.audio_queue = queue.Queue()
-        self.is_recording = False
-        self.audio_thread = None
-
-
-    def callback(self, indata, frames, time, status):
-        """
-        This will be called for each audio block
-        that gets recorded.
-        """
-        self.audio_queue.put(indata.copy())
-
-
-    def start_recording(self):
-        self.is_recording = True
-        self.audio_thread = sd.InputStream(
-            dtype="int16",
-            samplerate=self.sample_rate,
-            channels=self.channels,
-            callback=self.callback,
-            blocksize=2_000
-        )
-        self.audio_thread.start()
-
-
-    def stop_recording(self):
-        if self.is_recording:
-            self.is_recording = False
-            self.audio_thread.stop()
-            self.audio_thread.close()
-
-
-    def get_audio_chunk(self):
-        try:
-            return self.audio_queue.get_nowait()
-        except queue.Empty:
-            return None
